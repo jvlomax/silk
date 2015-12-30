@@ -3,9 +3,10 @@ import logging
 import sys
 import traceback
 from uuid import UUID
+from uuid import uuid1
 
 from django.core.urlresolvers import resolve
-
+from django.db import IntegrityError
 from silk import models
 from silk.collector import DataCollector
 from silk.config import SilkyConfig
@@ -168,13 +169,21 @@ class RequestModelFactory(object):
             namespace = resolved.namespace
             if namespace:
                 view_name = namespace + ':' + view_name
-        request_model = models.Request.objects.create(
-            path=path,
-            encoded_headers=self.encoded_headers(),
-            method=self.request.method,
-            query_params=query_params,
-            view_name=view_name,
-            body=body)
+        while True:
+            uuid = str(uuid1())
+            try:
+                request_model = models.Request.objects.create(
+                    id=uuid,
+                    path=path,
+                    encoded_headers=self.encoded_headers(),
+                    method=self.request.method,
+                    query_params=query_params,
+                    view_name=view_name,
+                    body=body)
+            except IntegrityError:
+                uuid = str(uuid1())
+            else:
+                break
         # Text fields are encoded as UTF-8 in Django and hence will try to coerce
         # anything to we pass to UTF-8. Some stuff like binary will fail.
         try:
@@ -255,10 +264,17 @@ class ResponseModelFactory(object):
                 header, val = k, v
             finally:
                 headers[header] = val
-        silky_response = models.Response.objects.create(request=self.request,
-                                                        status_code=self.response.status_code,
-                                                        encoded_headers=json.dumps(headers),
-                                                        body=b)
+        while True:
+            uuid = str(uuid1())
+            try:
+                silky_response = models.Response.objects.create(id=uuid, request=self.request,
+                                                                status_code=self.response.status_code,
+                                                                encoded_headers=json.dumps(headers),
+                                                                body=b)
+            except IntegrityError:
+                uuid = str(uuid1())
+            else:
+                break
         # Text fields are encoded as UTF-8 in Django and hence will try to coerce
         # anything to we pass to UTF-8. Some stuff like binary will fail.
         try:
